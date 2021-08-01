@@ -104,10 +104,8 @@ class LoadBinary(QDialog):
                                             self.fullFilePath.split('/')[-1], 
                                             sizeX, sizeY, frames, imageFormat, 
                                             self.isComplexImage.isChecked(), 
-                                            False, self.fullFilePath, 
-                                            dataCompare, 
+                                            False, dataCompare, 
                                             self.fullFilePathCompare.split('/')[-1]))
-            self.imageData[-1].move(100, 200)
             self.imageData[-1].show()
 
     def updateHeadersLength(self):    

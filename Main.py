@@ -22,6 +22,7 @@ class MainWindow(QWidget):
         self.openedFiles = []
         self.workingDirectory = os.path.expanduser('~')
 
+        # Remove this line
         self.openFile()
 
     def getWorkingDirectory(self):
@@ -32,12 +33,15 @@ class MainWindow(QWidget):
             self.workingDirectory = '/'.join(newPath.split('/')[0:-1])
 
     def openFile(self):
-        fileName = QFileDialog.getOpenFileName(self, "Open File", self.workingDirectory)[0]
-        #fileName = "0000029404.phi"
+        #fileName = QFileDialog.getOpenFileName(self, "Open File", self.workingDirectory)[0]
+        fileName = "0000029404.phi"
+        fileName = "/home/albelo/Downloads/STP-136/solo_L0_phi-hrt-flat_0667134081_V202103221851C_0162201100.fits"
         self.setWorkingDirectory(fileName)
 
         if (fileName.endswith(".fits")):
-            fitsFile = LoadFits()
+            fitsFile = LoadFits(self, fileName)
+            fitsFile.move(50, 100)
+            fitsFile.show()
             self.openedFiles.append(fitsFile)
         else:
             binaryFile = LoadBinary(self, fileName)
