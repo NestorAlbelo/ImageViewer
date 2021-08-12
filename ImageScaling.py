@@ -39,7 +39,7 @@ def zscale (image, nsamples=1000, contrast=0.25, bpmask=None, zmask=None):
     if npix%2 == 1:
         median = samples[center_pixel]
     else:
-        median = 0.5 * (samples[center_pixel] + samples[center_pixel + 1])
+        median = 0.5 * (float(samples[center_pixel]) + float(samples[center_pixel + 1]))
 
     #
     # Fit a line to the sorted array of samples

@@ -14,26 +14,14 @@ from ImageScaling import *
 import time
 
 class ImageData(QDialog):
-    def __init__(self, parent, _data, _dataName, _width, _height, _frames, 
-                    _dataType, _isComplex, _isLittleEndian, 
-                    _dataCompare=None, _dataCompareName=None):
+    def __init__(self, parent, _mainData, _compareData = None):
         super(ImageData, self).__init__(parent)
-        
-        self.dataInput = _data
-        self.dataName = _dataName
-        self.width = _width
-        self.height = _height
-        self.frames = _frames
-        self.datatype = _dataType
-        self.isComplex = _isComplex
-        self.isLittleEndian = _isLittleEndian
+
+        self.mainData = _mainData
+        self.compareData = _compareData
         self.indexCurrentImage = 0
-        self.dataCompare = _dataCompare
-        self.dataCompareName = _dataCompareName
         self.EVE_NAN = -2147483648
 
-        self.dataInputCopy = None
-        self.dataCompareCopy = None
         self.refAxes = 0
 
         self.createUI()
@@ -43,12 +31,7 @@ class ImageData(QDialog):
         self.fig.clear(True) 
 
         # There is not data to compare with
-        if (self.dataCompare is None):
-
-            # Exclude number of frames primes greater than 5
-            if (self.frames in [7, 11, 13, 17, 19, 23]):
-                self.showAllLabel.setEnabled(False)
-                self.showAll.setEnabled(False)
+        if (self.compareData is None):
 
             if (self.showAll.isChecked()):
                 self.indexImageLabel.setText(f"")
@@ -56,9 +39,9 @@ class ImageData(QDialog):
                 self.nextImageButton.setEnabled(False)
 
                 xPlot = self.gridNumber()
-                yPlot = int(self.frames / xPlot)
+                yPlot = int(self.mainData.frames / xPlot)
 
-                currentData = np.copy(self.dataInput)
+                currentData = np.copy(self.mainData.data)
                 
                 # Remove NaNs
                 if (self.removeNaNs.isChecked()):
@@ -70,7 +53,7 @@ class ImageData(QDialog):
                 self.prevImageButton.setEnabled(True)
                 self.nextImageButton.setEnabled(True)
 
-                currentData = np.copy(self.dataInput[self.indexCurrentImage])
+                currentData = np.copy(self.mainData.data[self.indexCurrentImage])
                 
                 # Remove NaNs
                 if (self.removeNaNs.isChecked()):
@@ -79,8 +62,13 @@ class ImageData(QDialog):
                 self.showOneImage(currentData)
 
         else:
-            currentData = np.copy(self.dataInput[self.indexCurrentImage])    
-            currentDataCompare = np.copy(self.dataCompare[self.indexCurrentImage]) 
+
+            # If a type convertion is required
+            if (self.convertDataTypes.isChecked()):
+                currentData, currentDataCompare = self.convertData()
+            else:
+                currentData = np.copy(self.mainData.data[self.indexCurrentImage])    
+                currentDataCompare = np.copy(self.compareData.data[self.indexCurrentImage]) 
 
             # Remove NaNs
             if (self.removeNaNs.isChecked()):
@@ -99,36 +87,36 @@ class ImageData(QDialog):
     def showOneImage(self, data):
 
         # Variables for more readability
-        X = self.width
-        Y = self.height
+        X = self.mainData.width
+        Y = self.mainData.height
 
         # Activate labels
         self.toggleMetrics(True)
 
         # Set message for current index
-        self.indexImageLabel.setText(f"Image {self.indexCurrentImage + 1} of {self.frames}")
+        self.indexImageLabel.setText(f"Image {self.indexCurrentImage + 1} of {self.mainData.frames}")
 
         data, vmin, vmax = self.scalingFunctions(data)        
 
-        # Create ROI for mean calculation
-        ROICenter = data[int(X/2) - 100:int(X/2) + 100,int(Y/2) - 100:int(Y/2) + 100]
+        # Create squared ROI for mean calculation of 256 pixels
+        ROICenter = data[int(X/2) - 128:int(X/2) + 128,int(Y/2) - 128:int(Y/2) + 128]
 
         # Set Max, Min and Mean
-        indexMax = np.argmax(data)
         indexMin = np.argmin(data)
         posXMin = int(indexMin/X)
         posYMin = int(indexMin - int(indexMin/X) * X)
         minValue = data.min()
+        indexMax = np.argmax(data)
         posXMax = int(indexMax/X)
         posYMax = int(indexMax - int(indexMax/X) * X)
         maxValue = data.max()
 
         self.minValue.setText(f"{minValue} ({posXMin}, {posYMin})")
         self.maxValue.setText(f"{maxValue} ({posXMax}, {posYMax})")
-        self.meanCenter.setText(str(np.mean(ROICenter)))
+        self.meanCenter.setText(f"{np.mean(ROICenter)}")
 
         self.refAxes = self.fig.add_subplot(1, 1, 1)
-        self.refAxes.title.set_text(self.dataName)
+        self.refAxes.title.set_text(f"Image {self.indexCurrentImage + 1}")
         self.refAxes.imshow(data, cmap=plt.cm.get_cmap(self.cmap.currentText()), vmin=vmin, vmax=vmax)            
 
     def showAllImages(self, data, xPlot, yPlot):
@@ -155,50 +143,65 @@ class ImageData(QDialog):
         
     def compareImages(self, dataInput, dataCompare):
 
-        # Variables for more readability
-        X = self.width
-        Y = self.height
-
         # Set message for current index
-        self.indexImageLabel.setText(f"Image {self.indexCurrentImage + 1} of {self.frames}")
+        self.indexImageLabel.setText(f"Image {self.indexCurrentImage + 1} of {self.mainData.frames}")
+
+        dataInput, vminInput, vmaxInput = self.scalingFunctions(dataInput)        
+        dataCompare, vminCompare, vmaxCompare = self.scalingFunctions(dataCompare)        
 
         numFigures = 2
 
         if (self.showDifference.isChecked()):
             numFigures = 3
 
-        if (self.invertDiff.isChecked()):
-            differenceImage = dataCompare - dataInput
+            # Enable UIs
+            self.invertDiffLabel.setEnabled(True)
+            self.invertDiff.setEnabled(True)
+            self.toggleMetrics(True)
+        
+            # Variables for more readability
+            X = self.mainData.width
+            Y = self.mainData.height
+
+            if (self.invertDiff.isChecked()):
+                differenceImage = dataCompare - dataInput
+            else:
+                differenceImage = dataInput - dataCompare
+
+            differenceImage, vminDiff, vmaxDiff = self.scalingFunctions(differenceImage)        
+
+            # Create ROI for mean calculation
+            ROICenter = differenceImage[int(X/2) - 128:int(X/2) + 128,int(Y/2) - 128:int(Y/2) + 128]
+
+            # Set Max, Min and Mean
+            indexMax = np.argmax(differenceImage)
+            indexMin = np.argmin(differenceImage)
+            posXMin = int(indexMin/X)
+            posYMin = int(indexMin - int(indexMin/X) * X)
+            minValue = differenceImage.min()
+            posXMax = int(indexMax/X)
+            posYMax = int(indexMax - int(indexMax/X) * X)
+            maxValue = differenceImage.max()
+
+            self.minValue.setText(f"{minValue} ({posXMin}, {posYMin})")
+            self.maxValue.setText(f"{maxValue} ({posXMax}, {posYMax})")
+            self.meanCenter.setText(str(np.mean(ROICenter)))
+
         else:
-            differenceImage = dataInput - dataCompare
+            self.minValue.setText("")
+            self.maxValue.setText("")
+            self.meanCenter.setText("")
 
-        dataInput, vminInput, vmaxInput = self.scalingFunctions(dataInput)        
-        dataCompare, vminCompare, vmaxCompare = self.scalingFunctions(dataCompare)        
-        differenceImage, vminDiff, vmaxDiff = self.scalingFunctions(differenceImage)        
-
-        # Create ROI for mean calculation
-        ROICenter = differenceImage[int(X/2) - 100:int(X/2) + 100,int(Y/2) - 100:int(Y/2) + 100]
-
-        # Set Max, Min and Mean
-        indexMax = np.argmax(differenceImage)
-        indexMin = np.argmin(differenceImage)
-        posXMin = int(indexMin/X)
-        posYMin = int(indexMin - int(indexMin/X) * X)
-        minValue = differenceImage.min()
-        posXMax = int(indexMax/X)
-        posYMax = int(indexMax - int(indexMax/X) * X)
-        maxValue = differenceImage.max()
-
-        self.minValue.setText(f"{minValue} ({posXMin}, {posYMin})")
-        self.maxValue.setText(f"{maxValue} ({posXMax}, {posYMax})")
-        self.meanCenter.setText(str(np.mean(ROICenter)))
+            self.invertDiffLabel.setEnabled(False)
+            self.invertDiff.setEnabled(False)
+            self.toggleMetrics(False)
 
         # Plot images            
         self.refAxes = self.fig.add_subplot(1, numFigures, 1)
-        self.refAxes.title.set_text(self.dataName)
+        self.refAxes.title.set_text(self.mainData.filePath.split('/')[-1])
         self.refAxes.imshow(dataInput, cmap=plt.cm.get_cmap(self.cmap.currentText()), vmin=vminInput, vmax=vmaxInput)
         self.ax = self.fig.add_subplot(1, numFigures, 2, sharex=self.refAxes, sharey=self.refAxes)
-        self.ax.title.set_text(self.dataCompareName)
+        self.ax.title.set_text(self.compareData.filePath.split('/')[-1])
         self.ax.imshow(dataCompare, cmap=plt.cm.get_cmap(self.cmap.currentText()), vmin=vminCompare, vmax=vmaxCompare)
 
         if (self.showDifference.isChecked()):
@@ -206,13 +209,12 @@ class ImageData(QDialog):
             self.ax.title.set_text("Difference")
             self.ax.imshow(differenceImage, cmap=plt.cm.get_cmap(self.cmap.currentText()), vmin=vminDiff, vmax=vmaxDiff)
     
-
     def increaseIndex(self):
-        self.indexCurrentImage = (self.indexCurrentImage + 1) % self.frames
+        self.indexCurrentImage = (self.indexCurrentImage + 1) % self.mainData.frames
         self.replotFigure()
     
     def decreaseIndex(self):
-        self.indexCurrentImage = (self.indexCurrentImage - 1) % self.frames
+        self.indexCurrentImage = (self.indexCurrentImage - 1) % self.mainData.frames
         self.replotFigure()
 
     def toggleMetrics(self, state):
@@ -224,10 +226,10 @@ class ImageData(QDialog):
         self.meanCenterLabel.setEnabled(state)
 
     def gridNumber(self):
-        for x in range(self.frames + 1, 0, -1):
-            if(self.frames % x == 0 and x <= 5):
-                if (self.frames / x < x):
-                    return int(self.frames / x)
+        for x in range(self.mainData.frames + 1, 0, -1):
+            if(self.mainData.frames % x == 0 and x <= 5):
+                if (self.mainData.frames / x < x):
+                    return int(self.mainData.frames / x)
                 else:
                     return (x)
 
@@ -258,9 +260,34 @@ class ImageData(QDialog):
 
         return data, minValue, maxValue
 
-    def createUI(self):
+    def convertData(self):
+        currentMainData = np.copy(self.mainData.data[self.indexCurrentImage])    
+        currentCompareData = np.copy(self.compareData.data[self.indexCurrentImage])
 
-        self.setWindowTitle("Image Data")
+        # Convert both images to float if their datatypes are differents
+        if (self.mainData.dataType != self.compareData.dataType):
+            currentMainData = currentMainData.astype(np.float)
+            currentCompareData = currentCompareData.astype(np.float)
+
+        # Check if bytes per pixel matches
+        if (self.mainData.bytesPerPixel < self.compareData.bytesPerPixel):
+            # 8 bits per byte
+            scaling = 1 << ((self.compareData.bytesPerPixel - self.mainData.bytesPerPixel) * 8)
+            currentMainData = currentMainData.astype(type(currentCompareData[0][0])) * scaling
+        
+        if (self.compareData.bytesPerPixel < self.mainData.bytesPerPixel):
+            # 8 bits per byte
+            scaling = 1 << ((self.mainData.bytesPerPixel - self.compareData.bytesPerPixel) * 8)
+            currentCompareData = currentCompareData.astype(type(currentMainData[0][0])) * scaling
+
+        return currentMainData, currentCompareData
+
+    def createUI(self):
+        
+        if (self.compareData == None):
+            self.setWindowTitle(f"{self.mainData.filePath.split('/')[-1]}")
+        else:
+            self.setWindowTitle(f"{self.mainData.filePath.split('/')[-1]} vs {self.compareData.filePath.split('/')[-1]}")
 
         # Create figure for this dataset
         self.fig, self.refAxes = plt.subplots(1, 1)
@@ -290,6 +317,7 @@ class ImageData(QDialog):
         self.showDifferenceLabel = QLabel("Show Difference:")
         self.invertDiffLabel = QLabel("Invert Difference:")
         self.flipVerticallyLabel = QLabel("Flip Vertically:")
+        self.convertDataTypesLabel = QLabel("Convert datatypes:")
         self.indexImageLabel = QLabel("")
         # -------------------------------------------------------------------- #
 
@@ -311,6 +339,7 @@ class ImageData(QDialog):
         self.showDifference = QCheckBox()
         self.invertDiff = QCheckBox()
         self.flipVertically = QCheckBox()
+        self.convertDataTypes = QCheckBox()
         # -------------------------------------------------------------------- #
 
         # Properties
@@ -329,8 +358,9 @@ class ImageData(QDialog):
         self.showDifferenceLabel.setFont(boldFont)
         self.invertDiffLabel.setFont(boldFont)
         self.flipVerticallyLabel.setFont(boldFont)
+        self.convertDataTypesLabel.setFont(boldFont)
 
-        if (self.frames == 1):
+        if (self.mainData.frames == 1):
             self.showAllLabel.setEnabled(False)
             self.showAll.setEnabled(False)
         # -------------------------------------------------------------------- #
@@ -352,15 +382,10 @@ class ImageData(QDialog):
         self.invertDiff.toggled.connect(self.replotFigure)
         self.showDifference.toggled.connect(self.replotFigure)
         self.flipVertically.toggled.connect(self.replotFigure)
+        self.convertDataTypes.toggled.connect(self.replotFigure)
 
         self.prevImageButton.clicked.connect(self.decreaseIndex)
         self.nextImageButton.clicked.connect(self.increaseIndex) 
-        # -------------------------------------------------------------------- #
-
-        # Do not remove NaNs from floats.
-        # -------------------------------------------------------------------- #
-        if (self.datatype.endswith("f4")):
-            self.removeNaNs.setEnabled(False)
         # -------------------------------------------------------------------- #
 
         # Canvas
@@ -382,11 +407,15 @@ class ImageData(QDialog):
         self.panelLayout.addWidget(self.scaleAlgorithmLabel, 2, 0)
         self.panelLayout.addWidget(self.scaleAlgorithm, 2, 1)
 
-        self.panelLayout.addWidget(self.removeNaNsLabel, 3, 0)
-        self.panelLayout.addWidget(self.removeNaNs, 3, 1)
+        # Do not remove NaNs from floats.
+        if ((not self.mainData.dataType.endswith("float")) and
+            ((not self.compareData is None) and 
+            (not self.compareData.dataType.endswith("float")))):
+            self.panelLayout.addWidget(self.removeNaNsLabel, 3, 0)
+            self.panelLayout.addWidget(self.removeNaNs, 3, 1)
 
         # If data to compare not exists
-        if (self.dataCompare is None):
+        if (self.compareData is None):
             self.panelLayout.addWidget(self.showAllLabel, 4, 0)
             self.panelLayout.addWidget(self.showAll, 4, 1)
         
@@ -413,10 +442,18 @@ class ImageData(QDialog):
         self.panelLayout.addWidget(self.flipVerticallyLabel, 9, 0)
         self.panelLayout.addWidget(self.flipVertically, 9, 1)
 
-        self.panelLayout.addWidget(self.indexImageLabel, 10, 0)
+        # If we have data to compare with
+        if (not self.compareData is None):
+            # Check that the datatypes matches, otherwise insert UI to fix it
+            if ((self.mainData.dataType != self.compareData.dataType) or
+                (self.mainData.bytesPerPixel != self.compareData.bytesPerPixel)):
+                self.panelLayout.addWidget(self.convertDataTypesLabel, 10, 0)
+                self.panelLayout.addWidget(self.convertDataTypes, 10, 1)
 
-        self.panelLayout.addWidget(self.prevImageButton, 11, 0)
-        self.panelLayout.addWidget(self.nextImageButton, 11, 1)
+        self.panelLayout.addWidget(self.indexImageLabel, 15, 0)
+
+        self.panelLayout.addWidget(self.prevImageButton, 16, 0)
+        self.panelLayout.addWidget(self.nextImageButton, 16, 1)
 
         verticalSpacer = QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding)
         self.panelLayout.addItem(verticalSpacer)
@@ -432,6 +469,12 @@ class ImageData(QDialog):
         self.main_layoutImageData.addLayout(self.canvasLayout, 0, 1, 1, 1)
         self.setLayout(self.main_layoutImageData)
         # -------------------------------------------------------------------- #
+
+        # Exclude number of frames primes greater than 5 to use ShowAll
+        if (self.mainData.frames in [7, 11, 13, 17, 19, 23]):
+            self.showAllLabel.setEnabled(False)
+            self.showAll.setEnabled(False)
+            self.showAllLabel.setToolTip("The number of frames introduced are not compatible with this option.")
 
         self.showMaximized()
 

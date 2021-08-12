@@ -1,3 +1,4 @@
+from LoadData import LoadData
 import sys, getopt
 import os
 from datetime import date
@@ -34,26 +35,22 @@ class MainWindow(QWidget):
 
     def openFile(self):
         #fileName = QFileDialog.getOpenFileName(self, "Open File", self.workingDirectory)[0]
-        fileName = "0000029404.phi"
-        fileName = "/home/albelo/Downloads/STP-136/solo_L0_phi-hrt-flat_0667134081_V202103221851C_0162201100.fits"
-        self.setWorkingDirectory(fileName)
+        fileName = "Images/0000029404.phi"
+        #fileName = "Images/solo_L0_phi-hrt-flat_0667134081_V202103221851C_0162201100.fits"
 
-        if (fileName.endswith(".fits")):
-            fitsFile = LoadFits(self, fileName)
-            fitsFile.move(50, 100)
-            fitsFile.show()
-            self.openedFiles.append(fitsFile)
-        else:
-            binaryFile = LoadBinary(self, fileName)
-            binaryFile.move(50, 100)
-            binaryFile.show()
+        if (fileName):
+            self.setWorkingDirectory(fileName)
 
-            self.openedFiles.append(binaryFile)   
+            currentFile = LoadData(self, fileName)
+            currentFile.move(50, 100)
+            currentFile.show()
+            self.openedFiles.append(currentFile) 
 
 app = QApplication(sys.argv)
 mainWindow = MainWindow()
 widget = QtWidgets.QStackedWidget()
 widget.addWidget(mainWindow)
 widget.setFixedSize(200, 400)
+widget.move(50, 50)
 widget.show()
 sys.exit(app.exec_())
