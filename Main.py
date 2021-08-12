@@ -23,9 +23,6 @@ class MainWindow(QWidget):
         self.openedFiles = []
         self.workingDirectory = os.path.expanduser('~')
 
-        # Remove this line
-        self.openFile()
-
     def getWorkingDirectory(self):
         return self.workingDirectory
     
@@ -34,9 +31,7 @@ class MainWindow(QWidget):
             self.workingDirectory = '/'.join(newPath.split('/')[0:-1])
 
     def openFile(self):
-        #fileName = QFileDialog.getOpenFileName(self, "Open File", self.workingDirectory)[0]
-        fileName = "Images/0000029404.phi"
-        #fileName = "Images/solo_L0_phi-hrt-flat_0667134081_V202103221851C_0162201100.fits"
+        fileName = QFileDialog.getOpenFileName(self, "Open File", self.workingDirectory)[0]
 
         if (fileName):
             self.setWorkingDirectory(fileName)
