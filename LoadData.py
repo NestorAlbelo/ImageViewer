@@ -62,7 +62,7 @@ class LoadData(QDialog):
             
             # Is Binary
             if (self.compareData.isBinary):
-                compareHeaderLength = int(self.headerLengthCompare.text())
+                compareHeaderLength = int(self.compareData.headerLength.text())
                 if ((compareHeaderLength < 0) or ((compareHeaderLength + self.compareData.currentImageSize) > self.compareData.size)):
                     self.alert = Alert("Error. Please check dimensions of the compare data.")
                     self.alert.show()
